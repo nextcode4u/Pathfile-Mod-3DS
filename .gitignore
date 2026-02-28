@@ -25,3 +25,6 @@ Thumbs.db
 
 # Local crash dump folder
 luma dumps/
+
+# Local SD-card release staging folder
+SD/
