@@ -1,0 +1,88 @@
+diff --git a/Source/SysCTR/main.cpp b/Source/SysCTR/main.cpp
+index 61d5895..a341662 100644
+--- a/Source/SysCTR/main.cpp
++++ b/Source/SysCTR/main.cpp
+@@ -1,6 +1,7 @@
+ #include <stdlib.h>
+ #include <stdio.h>
+ #include <dirent.h>
++#include <string.h>
+ 
+ #include <3ds.h>
+ #include <GL/picaGL.h>
+@@ -41,6 +42,48 @@ bool shouldQuit = false;
+ 
+ EAudioPluginMode enable_audio = APM_ENABLED_ASYNC;
+ 
++static bool ReadLaunchPathfile(const char * pathfile, char * out_path, size_t out_size)
++{
++	if (out_path == nullptr || out_size == 0)
++	{
++		return false;
++	}
++
++	FILE * file = fopen(pathfile, "rb");
++	if (file == nullptr)
++	{
++		return false;
++	}
++
++	size_t bytes_read = fread(out_path, 1, out_size - 1, file);
++	fclose(file);
++	out_path[bytes_read] = '\0';
++
++	while (bytes_read > 0)
++	{
++		const char c = out_path[bytes_read - 1];
++		if (c == '\n' || c == '\r' || c == '\t' || c == ' ')
++		{
++			out_path[bytes_read - 1] = '\0';
++			--bytes_read;
++			continue;
++		}
++		break;
++	}
++
++	size_t start = 0;
++	while (out_path[start] == ' ' || out_path[start] == '\t' || out_path[start] == '\n' || out_path[start] == '\r')
++	{
++		++start;
++	}
++	if (start > 0)
++	{
++		memmove(out_path, out_path + start, strlen(out_path + start) + 1);
++	}
++
++	return out_path[0] != '\0';
++}
++
+ #ifdef DAEDALUS_LOG
+ void log2file(const char *format, ...) {
+ 	__gnuc_va_list arg;
+@@ -126,13 +169,24 @@ extern u32 __ctru_heap_size;
+ int main(int argc, char* argv[])
+ {
+ 	char fullpath[512];
++	char pathfile_rom[512] = { 0 };
++	bool has_pathfile_rom = ReadLaunchPathfile("sdmc:/pathfile/n64_launch.txt", pathfile_rom, sizeof(pathfile_rom));
+ 
+ 	Initialize();
+ 	
+ 	while(shouldQuit == false)
+ 	{
+-		std::string rom = UI::DrawRomSelector();
+-		sprintf(fullpath, "%s%s", DAEDALUS_CTR_PATH("Roms/"), rom.c_str());
++		if (has_pathfile_rom)
++		{
++			strncpy(fullpath, pathfile_rom, sizeof(fullpath) - 1);
++			fullpath[sizeof(fullpath) - 1] = '\0';
++			has_pathfile_rom = false;
++		}
++		else
++		{
++			std::string rom = UI::DrawRomSelector();
++			sprintf(fullpath, "%s%s", DAEDALUS_CTR_PATH("Roms/"), rom.c_str());
++		}
+ 
+ 		System_Open(fullpath);
+ 		CPU_Run();

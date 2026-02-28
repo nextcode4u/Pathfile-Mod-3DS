@@ -1,0 +1,85 @@
+diff --git a/src/platform/3ds/main.c b/src/platform/3ds/main.c
+index 6c7ae1050..df0a64d4e 100644
+--- a/src/platform/3ds/main.c
++++ b/src/platform/3ds/main.c
+@@ -28,6 +28,8 @@
+ 
+ #include <3ds.h>
+ #include <3ds/gpu/gx.h>
++#include <stdio.h>
++#include <string.h>
+ 
+ mLOG_DECLARE_CATEGORY(GUI_3DS);
+ mLOG_DEFINE_CATEGORY(GUI_3DS, "3DS", "gui.3ds");
+@@ -826,15 +828,61 @@ THREAD_ENTRY _core2Test(void* context) {
+ 	UNUSED(context);
+ }
+ 
++static bool _readPathfileLaunch(const char* pathfile, char* outPath, size_t outSize) {
++	if (!outPath || !outSize) {
++		return false;
++	}
++
++	FILE* file = fopen(pathfile, "rb");
++	if (!file) {
++		return false;
++	}
++
++	size_t bytesRead = fread(outPath, 1, outSize - 1, file);
++	fclose(file);
++	outPath[bytesRead] = '\0';
++
++	while (bytesRead > 0) {
++		char c = outPath[bytesRead - 1];
++		if (c == '\n' || c == '\r' || c == '\t' || c == ' ') {
++			outPath[bytesRead - 1] = '\0';
++			--bytesRead;
++		} else {
++			break;
++		}
++	}
++
++	size_t start = 0;
++	while (outPath[start] == ' ' || outPath[start] == '\t' || outPath[start] == '\n' || outPath[start] == '\r') {
++		++start;
++	}
++	if (start > 0) {
++		memmove(outPath, outPath + start, strlen(outPath + start) + 1);
++	}
++
++	return outPath[0] != '\0';
++}
++
++static bool _isDirectLaunchPath(const char* path) {
++	if (!path || !path[0]) {
++		return false;
++	}
++	return path[0] == '/' || strncmp(path, "sdmc:/", 6) == 0 || strncmp(path, "romfs:/", 7) == 0;
++}
++
+ int main(int argc, char* argv[]) {
+ 	char initialPath[PATH_MAX] = { 0 };
+ 	if (argc > 1) {
+-		strncpy(initialPath, argv[1], sizeof(PATH_MAX));
++		strncpy(initialPath, argv[1], sizeof(initialPath) - 1);
++		initialPath[sizeof(initialPath) - 1] = '\0';
+ 	} else {
+ 		u8 hmac[0x20];
+ 		memset(hmac, 0, sizeof(hmac));
+ 		APT_ReceiveDeliverArg(initialPath, sizeof(initialPath), hmac, NULL, NULL);
+ 	}
++	if (!initialPath[0]) {
++		_readPathfileLaunch("sdmc:/pathfile/gba_launch.txt", initialPath, sizeof(initialPath));
++	}
+ 
+ 	rotation.d.sample = _sampleRotation;
+ 	rotation.d.readTiltX = _readTiltX;
+@@ -1099,7 +1147,7 @@ int main(int argc, char* argv[]) {
+ 		}
+ 	}
+ 
+-	if (initialPath[0] == '/' || useRomfs) {
++	if (_isDirectLaunchPath(initialPath) || useRomfs) {
+ 		mGUILoadInputMaps(&runner);
+ 		mGUIRun(&runner, initialPath);
+ 	} else {

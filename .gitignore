@@ -1,0 +1,24 @@
+# Top-level generated artifacts
+builds/
+
+# Local helper output
+*.log
+
+# Daedalus local build output
+external/DaedalusX64-3DS/daedbuild/
+
+# mGBA local build output
+external/mgba/build-3ds/
+
+# snes9x local build/output dirs
+external/snes9x_3ds/build/
+external/snes9x_3ds/output/
+
+# Common editor/system files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

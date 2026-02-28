@@ -1,0 +1,9 @@
+[submodule "external/DaedalusX64-3DS"]
+	path = external/DaedalusX64-3DS
+	url = https://github.com/nextcode4u/DaedalusX64-3DS.git
+[submodule "external/snes9x_3ds"]
+	path = external/snes9x_3ds
+	url = https://github.com/nextcode4u/snes9x_3ds.git
+[submodule "external/mgba"]
+	path = external/mgba
+	url = https://github.com/nextcode4u/mgba.git

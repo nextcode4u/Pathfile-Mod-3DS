@@ -1,0 +1,174 @@
+diff --git a/source/3dsmain.cpp b/source/3dsmain.cpp
+index beec92d..98917d8 100644
+--- a/source/3dsmain.cpp
++++ b/source/3dsmain.cpp
+@@ -70,6 +70,42 @@ int cfgFileAvailable = 0; // 0 = none, 1 = global, 2 = game-specific, 3 = global
+ char* hotkeysData[HOTKEYS_COUNT][3];
+ std::vector<DirectoryEntry> romFileNames; // needs to stay in scope, is there a better way?
+ 
++static bool readLaunchPathfile(const char* pathfile, char* outPath, size_t outSize)
++{
++    if (outPath == nullptr || outSize == 0) {
++        return false;
++    }
++
++    FILE* file = fopen(pathfile, "rb");
++    if (file == nullptr) {
++        return false;
++    }
++
++    size_t bytesRead = fread(outPath, 1, outSize - 1, file);
++    fclose(file);
++    outPath[bytesRead] = '\0';
++
++    while (bytesRead > 0) {
++        char c = outPath[bytesRead - 1];
++        if (c == '\n' || c == '\r' || c == '\t' || c == ' ') {
++            outPath[bytesRead - 1] = '\0';
++            --bytesRead;
++        } else {
++            break;
++        }
++    }
++
++    size_t start = 0;
++    while (outPath[start] == ' ' || outPath[start] == '\t' || outPath[start] == '\n' || outPath[start] == '\r') {
++        ++start;
++    }
++    if (start > 0) {
++        memmove(outPath, outPath + start, strlen(outPath + start) + 1);
++    }
++
++    return outPath[0] != '\0';
++}
++
+ // TODO: move thumbnail caching logic to a more appropriate place
+ Thread thumbnailCachingThread;
+ volatile bool thumbnailCachingThreadRunning = false;
+@@ -1488,6 +1524,39 @@ bool settingsLoad(bool includeGameSettings = true)
+ 
+ extern SCheatData Cheat;
+ 
++static bool applyLoadedRomState(const char* romDir, const char* romFilename)
++{
++    // reset tab states and select first tab
++    menu3dsClearLastSelectedIndicesByTab();
++    menu3dsSetLastSelectedTabIndex(0);
++
++    // when rom has been loaded, store current rom directory and filename in config
++    strncpy(settings3DS.lastSelectedDir, romDir, _MAX_PATH);
++    strncpy(settings3DS.lastSelectedFilename, romFilename, _MAX_PATH);
++
++    snd3DS.generateSilence = true;
++    settingsSave(false);
++
++    GPU3DS.emulatorState = EMUSTATE_EMULATE;
++    settingsLoad();
++
++    // check for valid hotkeys if circle pad binding is enabled
++    if ((!settings3DS.UseGlobalButtonMappings && settings3DS.BindCirclePad) ||
++        (settings3DS.UseGlobalButtonMappings && settings3DS.GlobalBindCirclePad))
++        for (int i = 0; i < HOTKEYS_COUNT; ++i)
++            ResetHotkeyIfNecessary(i, true);
++
++    // set proper state (radio_state) for every save slot of loaded game
++    for (int slot = 1; slot <= SAVESLOTS_MAX; ++slot)
++        impl3dsUpdateSlotState(slot, true);
++
++    if (settings3DS.AutoSavestate)
++        impl3dsLoadStateAuto();
++
++    snd3DS.generateSilence = false;
++    return true;
++}
++
+ bool emulatorLoadRom()
+ {
+     char romFileNameFullPath[_MAX_PATH];
+@@ -1500,39 +1569,46 @@ bool emulatorLoadRom()
+     
+     if(loaded)
+     {
+-        // reset tab states and select first tab
+-        menu3dsClearLastSelectedIndicesByTab();
+-        menu3dsSetLastSelectedTabIndex(0);
++        return applyLoadedRomState(file3dsGetCurrentDir(), romFileName);
++    }
+ 
+-        // when rom has been loaded, store current rom directory and filename in config
+-        strncpy(settings3DS.lastSelectedDir, file3dsGetCurrentDir(), _MAX_PATH);
+-        strncpy(settings3DS.lastSelectedFilename, romFileName, _MAX_PATH);
++    return false;   
++}
+ 
+-        snd3DS.generateSilence = true;
+-        settingsSave(false);
++bool emulatorLoadRomFromAbsolutePath(const char* absoluteRomPath)
++{
++    if (absoluteRomPath == nullptr || absoluteRomPath[0] == '\0') {
++        return false;
++    }
+ 
+-        GPU3DS.emulatorState = EMUSTATE_EMULATE;
+-        settingsLoad();
+-    
+-        // check for valid hotkeys if circle pad binding is enabled
+-        if ((!settings3DS.UseGlobalButtonMappings && settings3DS.BindCirclePad) || 
+-            (settings3DS.UseGlobalButtonMappings && settings3DS.GlobalBindCirclePad))
+-            for (int i = 0; i < HOTKEYS_COUNT; ++i)
+-                ResetHotkeyIfNecessary(i, true);
+-        
+-        // set proper state (radio_state) for every save slot of loaded game
+-        for (int slot = 1; slot <= SAVESLOTS_MAX; ++slot)
+-            impl3dsUpdateSlotState(slot, true);
++    char romPathCopy[_MAX_PATH];
++    strncpy(romPathCopy, absoluteRomPath, _MAX_PATH - 1);
++    romPathCopy[_MAX_PATH - 1] = '\0';
+ 
+-        if (settings3DS.AutoSavestate)
+-            impl3dsLoadStateAuto();
++    char* lastSlash = strrchr(romPathCopy, '/');
++    if (lastSlash == nullptr || *(lastSlash + 1) == '\0') {
++        return false;
++    }
+ 
+-        snd3DS.generateSilence = false;
++    char romDir[_MAX_PATH];
++    size_t dirLen = (size_t)(lastSlash - romPathCopy + 1);
++    if (dirLen >= _MAX_PATH) {
++        return false;
++    }
+ 
+-        return true;
++    memcpy(romDir, romPathCopy, dirLen);
++    romDir[dirLen] = '\0';
++
++    char* romName = lastSlash + 1;
++    strncpy(romFileName, romName, _MAX_PATH - 1);
++    romFileName[_MAX_PATH - 1] = '\0';
++
++    bool loaded = impl3dsLoadROM(romPathCopy);
++    if (!loaded || !Memory.ROMCRC32) {
++        return false;
+     }
+ 
+-    return false;   
++    return applyLoadedRomState(romDir, romName);
+ }
+ 
+ //----------------------------------------------------------------------
+@@ -2348,7 +2424,13 @@ int main()
+ 
+     initThumbnailThread();
+ 
+-    menuSelectFile();
++    char launchPath[_MAX_PATH];
++    bool loadedFromPathfile = readLaunchPathfile("sdmc:/pathfile/snes_launch.txt", launchPath, sizeof(launchPath)) &&
++        emulatorLoadRomFromAbsolutePath(launchPath);
++
++    if (!loadedFromPathfile) {
++        menuSelectFile();
++    }
+     while (aptMainLoop() && GPU3DS.emulatorState != EMUSTATE_END) {
+         switch (GPU3DS.emulatorState) {
+             case EMUSTATE_PAUSEMENU:
