@@ -12,6 +12,20 @@ This repository tracks upstream emulator sources (as submodules) and applies pat
 
 A frontend writes a ROM path into a known text file, launches the emulator, and the emulator auto-loads that ROM.
 
+## Linked Repositories
+
+Forks used by this project:
+
+- DaedalusX64-3DS: https://github.com/nextcode4u/DaedalusX64-3DS
+- snes9x_3ds: https://github.com/nextcode4u/snes9x_3ds
+- mGBA: https://github.com/nextcode4u/mgba
+
+Original upstream projects:
+
+- DaedalusX64-3DS: https://github.com/masterfeizz/DaedalusX64-3DS
+- snes9x_3ds: https://github.com/matbo87/snes9x_3ds
+- mGBA: https://github.com/mgba-emu/mgba
+
 ## Pathfile Format
 
 Pathfiles live on SD at:
@@ -96,3 +110,18 @@ PATHFILE_DIR=/tmp/pathfile ./scripts/write-pathfile.sh gba "sdmc:/roms/gba/Metro
 - This repo is intended for frontend-driven launching via pathfiles.
 - Some upstream toolchain combinations may produce different artifact sets (for example `.elf` only for some targets if packaging tools are unavailable).
 - Upstream emulator code is maintained in their own repositories; this project layers launch integration on top.
+
+## License And Attribution
+
+This project modifies and redistributes code from multiple emulator projects. Each emulator keeps its own license terms:
+
+- DaedalusX64-3DS: GNU GPL (see `external/DaedalusX64-3DS/copying.txt`)
+- mGBA: Mozilla Public License 2.0 (see `external/mgba/LICENSE`)
+- snes9x_3ds: Snes9x license text in source (see `external/snes9x_3ds/source/Snes9x/copyright.h`)
+
+When distributing builds from this repository:
+
+- Keep all original copyright and license notices.
+- Provide corresponding source code for your modified binaries, including your patches.
+- Include the license texts above with your release package.
+- Follow Snes9x non-commercial terms unless you have separate permission from rights holders.
